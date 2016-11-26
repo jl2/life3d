@@ -28,14 +28,6 @@
           (j (random (1- (array-dimension grid 1))))
           (k (random (1- (array-dimension grid 2)))))
       (setf (aref grid i j k) (random 1.0)))))
-  ;; (loop for i from 0 below 
-  ;;    do
-  ;;      (loop for j from 0 below (array-dimension grid 1)
-  ;;         do
-  ;;           (loop for k from 0 below (array-dimension grid 2)
-  ;;              do
-  ;;                (if (> (random 1.0) probability )
-  ;;                    )))))
 
 
 (defun neighbor-weight (grid i j k)
@@ -46,8 +38,7 @@
         (in (if (>= i (- (array-dimension grid 0) 1)) 0 (+ i 1)))
         (jn (if (>= j (- (array-dimension grid 1) 1)) 0 (+ j 1)))
         (kn (if (>= k (- (array-dimension grid 2) 1)) 0 (+ k 1)))
-        (count 0.0 ;; (aref grid i j k)
-          ))
+        (count 0.0))
 
     (incf count (aref grid ip jp kp))
     (incf count (aref grid i jp kp))
@@ -136,7 +127,6 @@
 
 (defun draw-board (grid win-width win-height &key (multiplier 1.5))
   "Used OpenGL to display the grid."
-  ;; (gl:matrix-mode :modelview)
   (gl:push-matrix)
   (gl:scale 0.25 0.25 0.25)
   (let ((dx (/ win-width (array-dimension grid 0)))
@@ -145,7 +135,6 @@
         (cx 0)
         (cy 0)
         (cz 0))
-    ;; (gl:begin :quads)
     (loop for i from 0 below (array-dimension grid 0)
        do
          (setf cy 0)
@@ -162,25 +151,11 @@
                                                           1.0
                                                           0.1
                                                           ,(clamp (* multiplier perc) 0.0 1.0)))
-                           ;; (gl:color 0.0 1.0 0.0 )
                            (cube-at cx cy cz dx dy dz))))
-                         
-                         ;; (gl:color 0 0 0)))
-                     
                    (incf cz dz))
               (incf cy dy))
          (incf cx dx))
-    ;; (gl:end)
     (gl:pop-matrix)))
-
-;; (defun draw-board (grid win-width win-height &key (multiplier 1.5))
-;;   "Used OpenGL to display the grid."
-;;   (gl:matrix-mode :modelview)
-;;   (gl:push-matrix)
-;;   (gl:color 0 1 0)
-;;   (dolist (cc '(0 10 20 30 40 50 60 70 80 90 100))
-;;     (cube-at cc cc cc 10 10 10))
-;;   (gl:pop-matrix))
 
 (defun start-life (&key
                      (board-width 50) (board-height 50) (board-depth 50)
@@ -220,8 +195,6 @@
       (glu:look-at 200 200 600 
                     50 50 50
                     0 1 0)
-      ;; (glu:look-at 150.0 150.0 150.0 0.0 0.0 0.0 0.0 1.0 0.0)
-      ;; (gl:ortho 0.0 win-width 0.0 win-height -1.0 1.0)
 
       (gl:matrix-mode :modelview)
       (gl:load-identity)
