@@ -13,7 +13,7 @@
 
 (defstruct transition
   (low 0.3)
-  (high 0.75)
+  (high 0.85)
   (death -0.3)
   (life 0.05))
 
@@ -157,9 +157,27 @@
          (incf cx dx))
     (gl:pop-matrix)))
 
+(defun handle-key-down (keysym)
+  "Handle key presses."
+  (case (sdl2:scancode keysym)
+    (:scancode-escape (sdl2:push-event :quit))
+    (:scancode-q (sdl2:push-event :quit))))
+
+(defun handle-window-size (width height)
+  "Adjusting the viewport and projection matrix for when the window size changes."
+  (gl:viewport 0 0 width height)
+  (gl:matrix-mode :projection)
+  (gl:load-identity)
+  (glu:perspective 50 (/ height width) 1.0 5000.0)
+  (glu:look-at 8 8 8 
+               0 0 0
+               0 1 0)
+  (gl:clear :color-buffer :depth-buffer))
+
+
+
 (defun start-life (&key
                      (board-width 50) (board-height 50) (board-depth 50)
-                     (win-width 800) (win-height 800)
                      (num (truncate (* board-width board-height board-depth 0.25)))
                      (multiplier 1.5)
                      (fps 30)
@@ -178,86 +196,89 @@
        (paused nil) ;; paused is t when paused, nil when not
        (trans (if (listp transition) (apply #'trans transition) transition)))
     (init-board (car boards) :num num )
-    (sdl:with-init
-        ()
-      ;; Setup the window and view
-      (sdl:window win-width win-height
-                  :opengl t
-                  :opengl-attributes '((:sdl-gl-depth-size   16)
-                                       (:sdl-gl-doublebuffer 1)))
-      (setf (sdl:frame-rate) fps)
-      
-      (gl:viewport 0 0 win-width win-height)
+    (sdl2:with-init (:everything)
+      (sdl2:with-window (window :title "filevis"
+                                :flags '(:shown :resizable :opengl))
+        (sdl2:with-gl-context (gl-context window)
 
-      (gl:matrix-mode :projection)
-      (gl:load-identity)
-      (glu:perspective 50 (/ win-height win-width) 1.0 50000.0)
-      (glu:look-at 200 200 600 
-                    50 50 50
-                    0 1 0)
+          (sdl2:gl-make-current window gl-context)
 
-      (gl:matrix-mode :modelview)
-      (gl:load-identity)
-      (gl:clear-color 0 0 0 0)
-      (gl:shade-model :smooth)
-      (gl:cull-face :back)
-      (gl:polygon-mode :front :fill)
-      (gl:draw-buffer :back)
+          (multiple-value-bind (win-width win-height) (sdl2:get-window-size window)
+            (handle-window-size win-width win-height)
 
-      (gl:material :front :ambient-and-diffuse #(0.2 0.2 0.2 0.2))
-      (gl:light :light0 :position #(200 200 300 0))
-      (gl:light :light0 :diffuse #(1 1 1 1))
-      (gl:light :light1 :position #(-100 200 -50 0))
-      (gl:light :light1 :diffuse #(1 1 1 1))
-      (gl:enable :cull-face :depth-test
-                 :lighting :light0 :light1)
+            (gl:viewport 0 0 win-width win-height)
 
-      (gl:clear :color-buffer :depth-buffer)
-      
-      ;; Draw the initial board
-      (draw-board (car boards) win-width win-height :multiplier multiplier)
-      (sdl:update-display)
+            (gl:matrix-mode :projection)
+            (gl:load-identity)
+            (glu:perspective 50 (/ win-height win-width) 1.0 50000.0)
+            (glu:look-at 200 200 600 
+                         50 50 50
+                         0 1 0)
 
-      ;; Handle events
-      (sdl:with-events ()
-        (:quit-event () t)
-        
-        (:key-down-event
-         ()
-         ;; quit
-         (when (or (sdl:key-down-p :sdl-key-q) (sdl:key-down-p :sdl-key-escape))
-           (sdl:push-quit-event))
+            (gl:matrix-mode :modelview)
+            (gl:load-identity)
+            (gl:clear-color 0 0 0 0)
+            (gl:shade-model :smooth)
+            (gl:cull-face :back)
+            (gl:polygon-mode :front :fill)
+            (gl:draw-buffer :back)
 
-         ;; Reset to a random state
-         (when (sdl:key-down-p :sdl-key-r)
-           (init-board (car boards)))
+            (gl:material :front :ambient-and-diffuse #(0.2 0.2 0.2 0.2))
+            (gl:light :light0 :position #(200 200 300 0))
+            (gl:light :light0 :diffuse #(1 1 1 1))
+            (gl:light :light1 :position #(-100 200 -50 0))
+            (gl:light :light1 :diffuse #(1 1 1 1))
+            (gl:enable :cull-face :depth-test
+                       :lighting :light0 :light1)
 
-         ;; Pause/unpause
-         (when (sdl:key-down-p :sdl-key-p)
-           (if paused
-               (setf paused nil)
-               (setf paused t))))
+            (gl:clear :color-buffer :depth-buffer)
+            
+            ;; Draw the initial board
+            (draw-board (car boards) win-width win-height :multiplier multiplier)
 
-        (:video-expose-event () (sdl:update-display))
+            (sdl2:with-event-loop (:method :poll :timeout 1/20)
+              (:windowevent
+               (:event event :data1 w :data2 h)
+               (when (= event sdl2-ffi:+sdl-windowevent-resized+)
+                 (handle-window-size w h)))
+              
+              ( :idle
+                ()
+                (if (> (- (sdl2:get-ticks) prev-tick) delay)
+                    (progn
+                      (setf prev-tick (sdl2:get-ticks))
 
-        (:idle
-         ;; Check if it's time to update
-         (if (> (- (sdl:system-ticks) prev-tick) delay)
-             (progn
-               (setf prev-tick (sdl:system-ticks))
+                      ;; Only update the board while not paused
+                      (when (not paused)
+                        (update-board (car boards) (cadr boards) :transition trans)
+                        (setf boards (list (cadr boards) (car boards))))
 
-               ;; Only update the board while not paused
-               (when (not paused)
-                 (update-board (car boards) (cadr boards) :transition trans)
-                 (setf boards (list (cadr boards) (car boards))))
+                      ;; Clear the screen and redraw
+                      (gl:clear :color-buffer :depth-buffer)
+                      (gl:push-matrix)
+                      (gl:rotate theta 0.0 1.0 0.0)
+                      (incf theta (/ pi 20.0))
+                      (gl:translate (/ board-width -2.0) (/ board-height -2.0) (/ board-depth -2.0))
+                      (draw-board (car boards) win-width win-height :multiplier multiplier)
+                      (gl:pop-matrix)
+                      (sdl2:gl-swap-window window)
+                      (sleep (/ 1.0 fps )))))
+              
+              (:quit () t)
 
-               ;; Clear the screen and redraw
-               (gl:clear :color-buffer :depth-buffer)
-               (gl:push-matrix)
-               (gl:rotate theta 0.0 1.0 0.0)
-               (incf theta (/ pi 20.0))
-               (gl:translate (/ board-width -2.0) (/ board-height -2.0) (/ board-depth -2.0))
-               (draw-board (car boards) win-width win-height :multiplier multiplier)
-               (gl:pop-matrix)
-               (sdl:update-display))))))))
+              (:keyup
+               (:keysym keysym)
+               (when (or (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-escape)
+                         (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-q))
+                 (sdl2:push-event :quit))
+               (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-r)
+                 (init-board (car boards)))
 
+               (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-p)
+                 (init-board (car boards)))))))))))
+
+(defun main (args)
+  (declare (ignorable args))
+  (sdl2:make-this-thread-main 
+   (lambda ()
+     (start-life))))

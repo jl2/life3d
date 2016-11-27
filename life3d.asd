@@ -5,9 +5,10 @@
   :description "Describe life3d here"
   :author "Jeremiah LaRocco <jeremiah.larocco@gmail.com"
   :license "Specify license here"
-  :depends-on (#:lispbuilder-sdl
+  :depends-on (#:sdl2
                #:cl-opengl
-               #:cl-glu)
+               #:cl-glu
+               #:trivial-main-thread)
   :components ((:file "package")
                (:file "life3d")))
 
